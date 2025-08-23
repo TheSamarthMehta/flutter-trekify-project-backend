@@ -11,12 +11,12 @@ COPY ["TrekifyBackend/TrekifyBackend.csproj", "."]
 RUN dotnet restore "TrekifyBackend.csproj"
 COPY . .
 WORKDIR "/src/."
-RUN dotnet build "TrekifyBackend.csproj" -c Release -o /app/build
+RUN dotnet build "TrekifyBackend.csproj" -c Release -o ./build_output
 
 FROM build AS publish
 RUN dotnet publish "TrekifyBackend.csproj" -c Release -o /app/publish
 
 FROM base AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /src/build_output /app .
 ENTRYPOINT ["dotnet", "TrekifyBackend.dll"]
