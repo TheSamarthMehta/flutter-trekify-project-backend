@@ -81,5 +81,16 @@ app.MapControllers();
 // Base route
 app.MapGet("/", () => "Trekify API (.NET) is up and running...");
 
+// Health check endpoint
+app.MapGet("/health", () => new { 
+    status = "healthy", 
+    timestamp = DateTime.UtcNow,
+    version = "1.0.0",
+    environment = app.Environment.EnvironmentName
+});
+
+// Configure for Render deployment
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
-app.Run($"http://localhost:{port}");
+var urls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS") ?? $"http://0.0.0.0:{port}";
+
+app.Run(urls);
