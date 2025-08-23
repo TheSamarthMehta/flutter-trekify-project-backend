@@ -7,7 +7,7 @@ EXPOSE 443
 # Use the official .NET 8.0 SDK image for building
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-COPY ["TrekifyBackend/TrekifyBackend.csproj", "TrekifyBackend/"]
+COPY ["TrekifyBackend/TrekifyBackend.csproj", "."]
 RUN dotnet restore "TrekifyBackend/TrekifyBackend.csproj"
 COPY . .
 WORKDIR "/src/."
