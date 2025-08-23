@@ -4,7 +4,7 @@ using TrekifyBackend.Services;
 namespace TrekifyBackend.Controllers
 {
     [ApiController]
-    [Route("api/data/")]
+    [Route("api/[controller]")]
     public class DataController : ControllerBase
     {
         private readonly IDataService _dataService;
