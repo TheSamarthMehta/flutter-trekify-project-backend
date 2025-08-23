@@ -8,13 +8,13 @@ EXPOSE 443
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 COPY ["TrekifyBackend/TrekifyBackend.csproj", "."]
-RUN dotnet restore "TrekifyBackend/TrekifyBackend.csproj"
+RUN dotnet restore "TrekifyBackend.csproj"
 COPY . .
 WORKDIR "/src/."
-RUN dotnet build "TrekifyBackend/TrekifyBackend.csproj" -c Release -o /app/build
+RUN dotnet build "TrekifyBackend.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "TrekifyBackend/TrekifyBackend.csproj" -c Release -o /app/publish
+RUN dotnet publish "TrekifyBackend.csproj" -c Release -o /app/publish
 
 FROM base AS final
 WORKDIR /app
