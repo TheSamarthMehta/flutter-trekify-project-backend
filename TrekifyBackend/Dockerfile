@@ -35,5 +35,8 @@ WORKDIR /app
 # Copy the published output from the 'publish' stage into the final image.
 COPY --from=publish /app/publish .
 
+# Copy the data folder from the build context
+COPY data/ ./data/
+
 # Set the entry point for the container to run the application.
 ENTRYPOINT ["dotnet", "TrekifyBackend.dll"]

@@ -47,14 +47,52 @@ namespace TrekifyBackend.Services
                 ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
                 var excelPath = Environment.GetEnvironmentVariable("EXCEL_DATA_PATH") 
-                               ?? Path.Combine(Directory.GetCurrentDirectory(), "..", "data", "Flutter Data Set.xlsx");
+                               ?? "data/Flutter Data Set.xlsx";
                 
-                var filePath = Path.Combine(Directory.GetCurrentDirectory(), excelPath);
+                // For production (Docker), use relative path from app directory
+                // For development, use path relative to current directory
+                string filePath;
+                if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Production")
+                {
+                    filePath = Path.Combine(Directory.GetCurrentDirectory(), excelPath);
+                }
+                else
+                {
+                    filePath = Path.Combine(Directory.GetCurrentDirectory(), "..", excelPath);
+                }
+                
+                Console.WriteLine($"Looking for Excel file at: {filePath}");
                 
                 if (!File.Exists(filePath))
                 {
                     Console.WriteLine($"Excel file not found at: {filePath}");
-                    return treks;
+                    Console.WriteLine($"Current directory: {Directory.GetCurrentDirectory()}");
+                    Console.WriteLine($"Files in current directory: {string.Join(", ", Directory.GetFiles(Directory.GetCurrentDirectory()))}");
+                    
+                    // Try alternative paths
+                    var alternativePaths = new[]
+                    {
+                        Path.Combine(Directory.GetCurrentDirectory(), "data", "Flutter Data Set.xlsx"),
+                        Path.Combine(Directory.GetCurrentDirectory(), "..", "data", "Flutter Data Set.xlsx"),
+                        Path.Combine("/app", "data", "Flutter Data Set.xlsx")
+                    };
+                    
+                    foreach (var altPath in alternativePaths)
+                    {
+                        Console.WriteLine($"Trying alternative path: {altPath}");
+                        if (File.Exists(altPath))
+                        {
+                            filePath = altPath;
+                            Console.WriteLine($"Found Excel file at alternative path: {altPath}");
+                            break;
+                        }
+                    }
+                    
+                    if (!File.Exists(filePath))
+                    {
+                        Console.WriteLine("Excel file not found in any expected location");
+                        return treks;
+                    }
                 }
 
                 using var package = new ExcelPackage(new FileInfo(filePath));
