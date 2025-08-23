@@ -46,7 +46,10 @@ namespace TrekifyBackend.Services
                 // Set the EPPlus license context
                 ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
-                var filePath = Path.Combine(Directory.GetCurrentDirectory(), "..", "data", "Flutter Data Set.xlsx");
+                var excelPath = Environment.GetEnvironmentVariable("EXCEL_DATA_PATH") 
+                               ?? Path.Combine(Directory.GetCurrentDirectory(), "..", "data", "Flutter Data Set.xlsx");
+                
+                var filePath = Path.Combine(Directory.GetCurrentDirectory(), excelPath);
                 
                 if (!File.Exists(filePath))
                 {

@@ -25,9 +25,15 @@ namespace TrekifyBackend.Services
 
         public string GenerateJwtToken(User user)
         {
-            var jwtSettings = _configuration.GetSection("JwtSettings");
-            var secret = jwtSettings["Secret"];
-            var expiryInDays = int.Parse(jwtSettings["ExpiryInDays"]);
+            var secret = Environment.GetEnvironmentVariable("JWT_SECRET") 
+                        ?? _configuration["JwtSettings:Secret"] 
+                        ?? "this_is_a_very_long_secret_key_for_development_only_32_chars_minimum";
+            
+            var expiryInDays = int.TryParse(Environment.GetEnvironmentVariable("JWT_EXPIRY_DAYS"), out int envDays) 
+                              ? envDays 
+                              : int.TryParse(_configuration["JwtSettings:ExpiryInDays"], out int configDays) 
+                                ? configDays 
+                                : 5;
 
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.UTF8.GetBytes(secret);

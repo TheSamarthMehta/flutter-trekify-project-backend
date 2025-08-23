@@ -64,6 +64,9 @@ packages/
 .env.test
 .env.production
 
+# But keep example files
+!.env.example
+
 # Logs
 logs
 *.log

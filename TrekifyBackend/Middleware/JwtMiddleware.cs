@@ -30,7 +30,9 @@ namespace TrekifyBackend.Middleware
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();
-                var secret = _configuration["JwtSettings:Secret"];
+                var secret = Environment.GetEnvironmentVariable("JWT_SECRET") 
+                            ?? _configuration["JwtSettings:Secret"] 
+                            ?? "this_is_a_very_long_secret_key_for_development_only_32_chars_minimum";
                 var key = Encoding.UTF8.GetBytes(secret);
 
                 tokenHandler.ValidateToken(token, new TokenValidationParameters

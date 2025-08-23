@@ -4,6 +4,14 @@ using MongoDB.Driver;
 using System.Text;
 using TrekifyBackend.Services;
 using TrekifyBackend.Middleware;
+using DotNetEnv;
+
+// Load environment variables from .env file
+var envFile = Path.Combine(Directory.GetCurrentDirectory(), "..", ".env");
+if (File.Exists(envFile))
+{
+    Env.Load(envFile);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,20 +23,25 @@ builder.Services.AddSwaggerGen();
 // Configure MongoDB
 builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("MongoDB");
+    var connectionString = Environment.GetEnvironmentVariable("MONGODB_URI") 
+                          ?? builder.Configuration.GetConnectionString("MongoDB") 
+                          ?? "mongodb://localhost:27017";
     return new MongoClient(connectionString);
 });
 
 builder.Services.AddScoped(serviceProvider =>
 {
     var client = serviceProvider.GetService<IMongoClient>();
-    var databaseName = builder.Configuration["DatabaseSettings:DatabaseName"];
+    var databaseName = Environment.GetEnvironmentVariable("DATABASE_NAME") 
+                      ?? builder.Configuration["DatabaseSettings:DatabaseName"] 
+                      ?? "trekify";
     return client.GetDatabase(databaseName);
 });
 
 // Configure JWT Authentication
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["Secret"];
+var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET") 
+               ?? builder.Configuration["JwtSettings:Secret"] 
+               ?? "this_is_a_very_long_secret_key_for_development_only_32_chars_minimum";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -49,8 +62,21 @@ builder.Services.AddScoped<IDataService, DataService>();
 builder.Services.AddScoped<IUserService, UserService>();
 
 // Configure CORS
+var allowedOrigins = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS")?.Split(',') 
+                    ?? new[] { "http://localhost:3000", "http://localhost:8080", "http://localhost:4200" };
+
 builder.Services.AddCors(options =>
 {
+    options.AddPolicy("AllowSpecificOrigins",
+        policy =>
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        });
+    
+    // Fallback policy for development
     options.AddPolicy("AllowAll",
         policy =>
         {
@@ -69,7 +95,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("AllowAll");
+app.UseCors(app.Environment.IsDevelopment() ? "AllowAll" : "AllowSpecificOrigins");
 app.UseAuthentication();
 app.UseAuthorization();
 
