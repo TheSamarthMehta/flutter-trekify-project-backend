@@ -105,11 +105,39 @@ namespace TrekifyBackend.Services
                 // Skip header row (start from row 2)
                 for (int row = 2; row <= rowCount; row++)
                 {
+                    // The columns appear to be swapped based on the data we're seeing
+                    var state = worksheet.Cells[row, 3].Value?.ToString() ?? "";  // Column 3 has state names
+                    var trekName = worksheet.Cells[row, 2].Value?.ToString() ?? "";  // Column 2 has trek names
+                    
+                    // Look for actual Cloudinary URLs in any column (most likely in columns 11-15)
+                    string imageUrl = "";
+                    for (int col = 1; col <= 15; col++)
+                    {
+                        var cellValue = worksheet.Cells[row, col].Value?.ToString() ?? "";
+                        if (!string.IsNullOrEmpty(cellValue) && 
+                            (cellValue.Contains("cloudinary.com") || 
+                             cellValue.Contains("res.cloudinary") ||
+                             cellValue.StartsWith("https://res.cloudinary")))
+                        {
+                            imageUrl = cellValue;
+                            if (row <= 10) _logger.LogInformation($"Found Cloudinary URL in column {col} for '{trekName}': {imageUrl}");
+                            break;
+                        }
+                    }
+                    
+                    // Debug logging for first few rows to see structure
+                    if (row <= 5)
+                    {
+                        _logger.LogInformation($"Row {row}: State='{state}', TrekName='{trekName}', ImageURL='{imageUrl}'");
+                    }
+                    
+                    // Only use exact URLs from Excel - no fallback URLs
+                    
                     var trek = new Trek
                     {
                         SerialNumber = int.TryParse(worksheet.Cells[row, 1].Value?.ToString(), out int srNo) ? srNo : 0,
-                        State = worksheet.Cells[row, 2].Value?.ToString() ?? "",
-                        TrekName = worksheet.Cells[row, 3].Value?.ToString() ?? "",
+                        State = state,
+                        TrekName = trekName,
                         TrekType = worksheet.Cells[row, 4].Value?.ToString() ?? "",
                         DifficultyLevel = worksheet.Cells[row, 5].Value?.ToString() ?? "",
                         Season = worksheet.Cells[row, 6].Value?.ToString() ?? "",
@@ -117,7 +145,7 @@ namespace TrekifyBackend.Services
                         Distance = worksheet.Cells[row, 8].Value?.ToString() ?? "",
                         MaxAltitude = worksheet.Cells[row, 9].Value?.ToString() ?? "",
                         TrekDescription = worksheet.Cells[row, 10].Value?.ToString() ?? "",
-                        Image = worksheet.Cells[row, 11].Value?.ToString() ?? ""
+                        Image = imageUrl
                     };
                     
                     treks.Add(trek);
@@ -132,6 +160,14 @@ namespace TrekifyBackend.Services
             }
             
             return treks;
+        }
+
+        private bool IsImageFile(string filePath)
+        {
+            var extension = Path.GetExtension(filePath).ToLowerInvariant();
+            return extension == ".jpg" || extension == ".jpeg" || extension == ".png" || 
+                   extension == ".gif" || extension == ".bmp" || extension == ".webp" || 
+                   extension == ".svg" || extension == ".avif";
         }
     }
 }
