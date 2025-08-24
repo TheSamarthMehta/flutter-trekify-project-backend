@@ -1,6 +1,4 @@
 using OfficeOpenXml;
-using Microsoft.EntityFrameworkCore;
-using TrekifyBackend.Data;
 using TrekifyBackend.Models;
 
 namespace TrekifyBackend.Services
@@ -10,62 +8,35 @@ namespace TrekifyBackend.Services
         Task<List<Trek>> GetAllTreksAsync();
         Task<List<Trek>> GetTreksByStateAsync(string state);
         Task<Trek?> GetTrekByIdAsync(int id);
-        Task SeedDataFromExcelAsync();
     }
 
     public class DataService : IDataService
     {
-        private readonly TrekifyDbContext _context;
+        private readonly ILogger<DataService> _logger;
 
-        public DataService(TrekifyDbContext context)
+        public DataService(ILogger<DataService> logger)
         {
-            _context = context;
+            _logger = logger;
         }
 
         public async Task<List<Trek>> GetAllTreksAsync()
         {
-            // If no data in database, seed from Excel
-            if (!await _context.Treks.AnyAsync())
-            {
-                await SeedDataFromExcelAsync();
-            }
-            
-            return await _context.Treks.ToListAsync();
+            return await Task.FromResult(LoadTreksFromExcel());
         }
 
         public async Task<List<Trek>> GetTreksByStateAsync(string state)
         {
-            // If no data in database, seed from Excel
-            if (!await _context.Treks.AnyAsync())
-            {
-                await SeedDataFromExcelAsync();
-            }
-            
-            return await _context.Treks
-                .Where(t => t.State.Contains(state))
-                .ToListAsync();
+            var allTreks = LoadTreksFromExcel();
+            var filtered = allTreks.Where(t => 
+                t.State.Contains(state, StringComparison.OrdinalIgnoreCase)).ToList();
+            return await Task.FromResult(filtered);
         }
 
         public async Task<Trek?> GetTrekByIdAsync(int id)
         {
-            // If no data in database, seed from Excel
-            if (!await _context.Treks.AnyAsync())
-            {
-                await SeedDataFromExcelAsync();
-            }
-            
-            return await _context.Treks.FirstOrDefaultAsync(t => t.SerialNumber == id);
-        }
-
-        public async Task SeedDataFromExcelAsync()
-        {
-            var treks = LoadTreksFromExcel();
-            if (treks.Any())
-            {
-                await _context.Treks.AddRangeAsync(treks);
-                await _context.SaveChangesAsync();
-                Console.WriteLine($"Seeded {treks.Count} treks from Excel to database");
-            }
+            var allTreks = LoadTreksFromExcel();
+            var trek = allTreks.FirstOrDefault(t => t.SerialNumber == id);
+            return await Task.FromResult(trek);
         }
 
         private List<Trek> LoadTreksFromExcel()
@@ -92,13 +63,12 @@ namespace TrekifyBackend.Services
                     filePath = Path.Combine(Directory.GetCurrentDirectory(), "..", excelPath);
                 }
                 
-                Console.WriteLine($"Looking for Excel file at: {filePath}");
+                _logger.LogInformation($"Looking for Excel file at: {filePath}");
                 
                 if (!File.Exists(filePath))
                 {
-                    Console.WriteLine($"Excel file not found at: {filePath}");
-                    Console.WriteLine($"Current directory: {Directory.GetCurrentDirectory()}");
-                    Console.WriteLine($"Files in current directory: {string.Join(", ", Directory.GetFiles(Directory.GetCurrentDirectory()))}");
+                    _logger.LogError($"Excel file not found at: {filePath}");
+                    _logger.LogInformation($"Current directory: {Directory.GetCurrentDirectory()}");
                     
                     // Try alternative paths
                     var alternativePaths = new[]
@@ -110,18 +80,18 @@ namespace TrekifyBackend.Services
                     
                     foreach (var altPath in alternativePaths)
                     {
-                        Console.WriteLine($"Trying alternative path: {altPath}");
+                        _logger.LogInformation($"Trying alternative path: {altPath}");
                         if (File.Exists(altPath))
                         {
                             filePath = altPath;
-                            Console.WriteLine($"Found Excel file at alternative path: {altPath}");
+                            _logger.LogInformation($"Found Excel file at alternative path: {altPath}");
                             break;
                         }
                     }
                     
                     if (!File.Exists(filePath))
                     {
-                        Console.WriteLine("Excel file not found in any expected location");
+                        _logger.LogError("Excel file not found in any expected location");
                         return treks;
                     }
                 }
@@ -130,7 +100,7 @@ namespace TrekifyBackend.Services
                 var worksheet = package.Workbook.Worksheets[0]; // First worksheet
                 
                 var rowCount = worksheet.Dimension?.Rows ?? 0;
-                Console.WriteLine($"Found {rowCount} rows in Excel file");
+                _logger.LogInformation($"Found {rowCount} rows in Excel file");
                 
                 // Skip header row (start from row 2)
                 for (int row = 2; row <= rowCount; row++)
@@ -153,11 +123,12 @@ namespace TrekifyBackend.Services
                     treks.Add(trek);
                 }
                 
-                Console.WriteLine($"Loaded {treks.Count} treks from Excel file");
+                _logger.LogInformation($"Successfully loaded {treks.Count} treks from Excel file");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading Excel file: {ex.Message}");
+                _logger.LogError($"Error loading Excel file: {ex.Message}");
+                _logger.LogError($"Stack trace: {ex.StackTrace}");
             }
             
             return treks;
