@@ -45,10 +45,18 @@ namespace TrekifyBackend.Middleware
                 }, out SecurityToken validatedToken);
 
                 var jwtToken = (JwtSecurityToken)validatedToken;
-                var userId = jwtToken.Claims.First(x => x.Type == "id").Value;
-
-                // Attach user to context
-                context.Items["UserId"] = userId;
+                var userIdString = jwtToken.Claims.First(x => x.Type == "id").Value;
+                
+                if (int.TryParse(userIdString, out int userId))
+                {
+                    // Attach user to context
+                    context.Items["UserId"] = userId;
+                }
+                else
+                {
+                    // Handle legacy string IDs if needed
+                    context.Items["UserId"] = userIdString;
+                }
             }
             catch
             {

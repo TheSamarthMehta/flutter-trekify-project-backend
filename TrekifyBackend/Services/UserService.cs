@@ -1,4 +1,5 @@
-using MongoDB.Driver;
+using Microsoft.EntityFrameworkCore;
+using TrekifyBackend.Data;
 using TrekifyBackend.Models;
 
 namespace TrekifyBackend.Services
@@ -6,32 +7,33 @@ namespace TrekifyBackend.Services
     public interface IUserService
     {
         Task<User?> GetByEmailAsync(string email);
-        Task<User?> GetByIdAsync(string id);
+        Task<User?> GetByIdAsync(int id);
         Task<User> CreateAsync(User user);
     }
 
     public class UserService : IUserService
     {
-        private readonly IMongoCollection<User> _users;
+        private readonly TrekifyDbContext _context;
 
-        public UserService(IMongoDatabase database)
+        public UserService(TrekifyDbContext context)
         {
-            _users = database.GetCollection<User>("users");
+            _context = context;
         }
 
         public async Task<User?> GetByEmailAsync(string email)
         {
-            return await _users.Find(x => x.Email == email).FirstOrDefaultAsync();
+            return await _context.Users.FirstOrDefaultAsync(x => x.Email == email);
         }
 
-        public async Task<User?> GetByIdAsync(string id)
+        public async Task<User?> GetByIdAsync(int id)
         {
-            return await _users.Find(x => x.Id == id).FirstOrDefaultAsync();
+            return await _context.Users.FindAsync(id);
         }
 
         public async Task<User> CreateAsync(User user)
         {
-            await _users.InsertOneAsync(user);
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
             return user;
         }
     }

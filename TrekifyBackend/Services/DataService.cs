@@ -1,4 +1,6 @@
 using OfficeOpenXml;
+using Microsoft.EntityFrameworkCore;
+using TrekifyBackend.Data;
 using TrekifyBackend.Models;
 
 namespace TrekifyBackend.Services
@@ -8,33 +10,62 @@ namespace TrekifyBackend.Services
         Task<List<Trek>> GetAllTreksAsync();
         Task<List<Trek>> GetTreksByStateAsync(string state);
         Task<Trek?> GetTrekByIdAsync(int id);
+        Task SeedDataFromExcelAsync();
     }
 
     public class DataService : IDataService
     {
-        private readonly List<Trek> _treks;
+        private readonly TrekifyDbContext _context;
 
-        public DataService()
+        public DataService(TrekifyDbContext context)
         {
-            _treks = LoadTreksFromExcel();
+            _context = context;
         }
 
         public async Task<List<Trek>> GetAllTreksAsync()
         {
-            return await Task.FromResult(_treks);
+            // If no data in database, seed from Excel
+            if (!await _context.Treks.AnyAsync())
+            {
+                await SeedDataFromExcelAsync();
+            }
+            
+            return await _context.Treks.ToListAsync();
         }
 
         public async Task<List<Trek>> GetTreksByStateAsync(string state)
         {
-            var filtered = _treks.Where(t => 
-                t.State.Contains(state, StringComparison.OrdinalIgnoreCase)).ToList();
-            return await Task.FromResult(filtered);
+            // If no data in database, seed from Excel
+            if (!await _context.Treks.AnyAsync())
+            {
+                await SeedDataFromExcelAsync();
+            }
+            
+            return await _context.Treks
+                .Where(t => t.State.Contains(state))
+                .ToListAsync();
         }
 
         public async Task<Trek?> GetTrekByIdAsync(int id)
         {
-            var trek = _treks.FirstOrDefault(t => t.SerialNumber == id);
-            return await Task.FromResult(trek);
+            // If no data in database, seed from Excel
+            if (!await _context.Treks.AnyAsync())
+            {
+                await SeedDataFromExcelAsync();
+            }
+            
+            return await _context.Treks.FirstOrDefaultAsync(t => t.SerialNumber == id);
+        }
+
+        public async Task SeedDataFromExcelAsync()
+        {
+            var treks = LoadTreksFromExcel();
+            if (treks.Any())
+            {
+                await _context.Treks.AddRangeAsync(treks);
+                await _context.SaveChangesAsync();
+                Console.WriteLine($"Seeded {treks.Count} treks from Excel to database");
+            }
         }
 
         private List<Trek> LoadTreksFromExcel()
@@ -99,6 +130,7 @@ namespace TrekifyBackend.Services
                 var worksheet = package.Workbook.Worksheets[0]; // First worksheet
                 
                 var rowCount = worksheet.Dimension?.Rows ?? 0;
+                Console.WriteLine($"Found {rowCount} rows in Excel file");
                 
                 // Skip header row (start from row 2)
                 for (int row = 2; row <= rowCount; row++)
@@ -120,6 +152,8 @@ namespace TrekifyBackend.Services
                     
                     treks.Add(trek);
                 }
+                
+                Console.WriteLine($"Loaded {treks.Count} treks from Excel file");
             }
             catch (Exception ex)
             {

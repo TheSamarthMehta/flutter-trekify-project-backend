@@ -1,45 +1,46 @@
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization.Attributes;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TrekifyBackend.Models
 {
+    [Table("Treks")]
     public class Trek
     {
-        [BsonId]
-        [BsonRepresentation(BsonType.ObjectId)]
-        public string Id { get; set; } = ObjectId.GenerateNewId().ToString();
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int Id { get; set; }
 
-        [BsonElement("Sr No.")]
+        [Required]
         public int SerialNumber { get; set; }
 
-        [BsonElement("State")]
+        [MaxLength(100)]
         public string State { get; set; } = string.Empty;
 
-        [BsonElement("Trek Name")]
+        [MaxLength(200)]
         public string TrekName { get; set; } = string.Empty;
 
-        [BsonElement("Trek Type")]
+        [MaxLength(100)]
         public string TrekType { get; set; } = string.Empty;
 
-        [BsonElement("Difficulty Level")]
+        [MaxLength(50)]
         public string DifficultyLevel { get; set; } = string.Empty;
 
-        [BsonElement("Season")]
+        [MaxLength(100)]
         public string Season { get; set; } = string.Empty;
 
-        [BsonElement("Duration")]
+        [MaxLength(100)]
         public string Duration { get; set; } = string.Empty;
 
-        [BsonElement("Distance")]
+        [MaxLength(100)]
         public string Distance { get; set; } = string.Empty;
 
-        [BsonElement("Max Altitude")]
+        [MaxLength(100)]
         public string MaxAltitude { get; set; } = string.Empty;
 
-        [BsonElement("Trek Description")]
+        [Column(TypeName = "NVARCHAR(MAX)")]
         public string TrekDescription { get; set; } = string.Empty;
 
-        [BsonElement("Image")]
+        [MaxLength(500)]
         public string Image { get; set; } = string.Empty;
     }
 }

@@ -42,7 +42,7 @@ namespace TrekifyBackend.Services
             {
                 Subject = new ClaimsIdentity(new[]
                 {
-                    new Claim("id", user.Id)
+                    new Claim("id", user.Id.ToString())
                 }),
                 Expires = DateTime.UtcNow.AddDays(expiryInDays),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)

@@ -95,11 +95,25 @@ namespace TrekifyBackend.Controllers
         {
             try
             {
-                var userId = HttpContext.Items["UserId"]?.ToString();
+                var userIdObj = HttpContext.Items["UserId"];
                 
-                if (string.IsNullOrEmpty(userId))
+                if (userIdObj == null)
                 {
                     return Unauthorized(new { msg = "No token, authorization denied" });
+                }
+
+                int userId;
+                if (userIdObj is int id)
+                {
+                    userId = id;
+                }
+                else if (int.TryParse(userIdObj.ToString(), out int parsedId))
+                {
+                    userId = parsedId;
+                }
+                else
+                {
+                    return Unauthorized(new { msg = "Invalid user ID format" });
                 }
 
                 var user = await _userService.GetByIdAsync(userId);

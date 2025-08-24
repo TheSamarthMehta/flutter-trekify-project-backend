@@ -1,32 +1,31 @@
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization.Attributes;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TrekifyBackend.Models
 {
+    [Table("Users")]
     public class User
     {
-        [BsonId]
-        [BsonRepresentation(BsonType.ObjectId)]
-        public string Id { get; set; } = ObjectId.GenerateNewId().ToString();
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int Id { get; set; }
 
         [Required]
-        [BsonElement("name")]
+        [MaxLength(100)]
         public string Name { get; set; } = string.Empty;
 
         [Required]
         [EmailAddress]
-        [BsonElement("email")]
+        [MaxLength(255)]
         public string Email { get; set; } = string.Empty;
 
         [Required]
-        [BsonElement("password")]
+        [MaxLength(255)]
         public string Password { get; set; } = string.Empty;
 
-        [BsonElement("avatar")]
+        [MaxLength(500)]
         public string? Avatar { get; set; }
 
-        [BsonElement("date")]
         public DateTime Date { get; set; } = DateTime.UtcNow;
     }
 

@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using MongoDB.Driver;
+using Microsoft.EntityFrameworkCore;
 using System.Text;
 using TrekifyBackend.Services;
 using TrekifyBackend.Middleware;
+using TrekifyBackend.Data;
 using DotNetEnv;
 
 // Load environment variables from .env file
@@ -20,23 +21,13 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Configure MongoDB
-builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
-{
-    var connectionString = Environment.GetEnvironmentVariable("MONGODB_URI") 
-                          ?? builder.Configuration.GetConnectionString("MongoDB") 
-                          ?? "mongodb://localhost:27017";
-    return new MongoClient(connectionString);
-});
+// Configure SQL Server Database
+var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_CONNECTION_STRING") 
+                      ?? builder.Configuration.GetConnectionString("DefaultConnection") 
+                      ?? "Server=localhost;Database=TrekifyDB;Trusted_Connection=true;TrustServerCertificate=true;";
 
-builder.Services.AddScoped(serviceProvider =>
-{
-    var client = serviceProvider.GetService<IMongoClient>();
-    var databaseName = Environment.GetEnvironmentVariable("DATABASE_NAME") 
-                      ?? builder.Configuration["DatabaseSettings:DatabaseName"] 
-                      ?? "trekify";
-    return client.GetDatabase(databaseName);
-});
+builder.Services.AddDbContext<TrekifyDbContext>(options =>
+    options.UseSqlServer(connectionString));
 
 // Configure JWT Authentication
 var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET") 
@@ -87,6 +78,14 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Ensure database is created
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<TrekifyDbContext>();
+    context.Database.EnsureCreated();
+    Console.WriteLine("Database ensured created");
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
