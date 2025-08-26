@@ -17,17 +17,17 @@ app.use('/images', express.static(path.join(__dirname, 'Images')));
 // MongoDB connection
 const connectDB = async () => {
   try {
-    if (process.env.MONGODB_URI && process.env.MONGODB_URI !== 'mongodb://localhost:27017/trekify') {
-      const conn = await mongoose.connect(process.env.MONGODB_URI, {
+    if (process.env.MONGO_URI) {
+      const conn = await mongoose.connect(process.env.MONGO_URI, {
         useNewUrlParser: true,
         useUnifiedTopology: true,
       });
-      console.log(`MongoDB Connected: ${conn.connection.host}`);
+      console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
     } else {
-      console.log('MongoDB connection skipped - using local data only');
+      console.log('⚠️  No MongoDB URI found - using local data only');
     }
   } catch (error) {
-    console.warn('MongoDB connection failed, continuing without database:', error.message);
+    console.warn('❌ MongoDB connection failed:', error.message);
   }
 };
 
@@ -41,9 +41,10 @@ app.use('/api/data', require('./routes/data'));
 // Health check route
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'Flutter Trekify Backend API is running!', 
-    status: 'success',
-    timestamp: new Date().toISOString()
+    success: true,
+    message: 'Trekify API Running',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -57,17 +58,20 @@ app.use('*', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('❌ Error:', err.message);
   res.status(500).json({ 
     success: false, 
-    message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    message: 'Server error'
   });
 });
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log('🚀 Trekify Backend Started');
+  console.log(`📡 Server: http://localhost:${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔑 JWT Secret: ${process.env.JWT_SECRET ? 'Configured' : 'Not Set'}`);
+  console.log(`💾 Database: ${process.env.MONGO_URI ? 'MongoDB' : 'Local Data'}`);
+  console.log('✨ Ready to serve requests\n');
 });

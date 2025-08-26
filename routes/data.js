@@ -119,18 +119,95 @@ router.get('/load-excel', async (req, res) => {
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    // For now, redirect to load-excel endpoint
-    // In a real app, you'd cache this data in MongoDB
-    const response = await fetch(`${req.protocol}://${req.get('host')}/api/data/load-excel`);
-    const data = await response.json();
+    console.log('🏔️  All treks fetched');
     
-    res.json(data);
+    // Path to Excel file
+    const excelPath = path.join(__dirname, '..', 'data', 'Flutter Data Set.xlsx');
+    
+    if (!fs.existsSync(excelPath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Excel file not found'
+      });
+    }
+
+    // Read Excel file
+    const workbook = XLSX.readFile(excelPath);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    // Convert to JSON
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    
+    if (jsonData.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Excel file is empty'
+      });
+    }
+
+    // Process the data
+    const treks = [];
+    
+    for (let i = 1; i < jsonData.length; i++) {
+      const row = jsonData[i];
+      if (!row || row.length === 0) continue;
+
+      const trek = {
+        id: i - 1,
+        serialNumber: row[0] || i,
+        trekName: row[1] || '',
+        state: row[2] || '',
+        trekType: row[3] || '',
+        difficultyLevel: row[4] || '',
+        season: row[5] || '',
+        duration: row[6] || '',
+        distance: row[7] || '',
+        maxAltitude: row[8] || '',
+        trekDescription: row[9] || '',
+        image: ''
+      };
+
+      // Look for Cloudinary URLs in column 12
+      const cloudinaryColumn = row[12];
+      if (cloudinaryColumn && typeof cloudinaryColumn === 'string' && 
+          (cloudinaryColumn.includes('cloudinary.com') || 
+           cloudinaryColumn.includes('res.cloudinary') ||
+           cloudinaryColumn.startsWith('https://res.cloudinary'))) {
+        trek.image = cloudinaryColumn;
+      } else {
+        // Fallback: Look in other columns
+        for (let j = 10; j < row.length; j++) {
+          const cellValue = row[j];
+          if (cellValue && typeof cellValue === 'string' && 
+              (cellValue.includes('cloudinary.com') || 
+               cellValue.includes('res.cloudinary') ||
+               cellValue.startsWith('https://res.cloudinary'))) {
+            trek.image = cellValue;
+            break;
+          }
+        }
+      }
+
+      // Only add trek if it has valid data
+      if (trek.trekName && trek.state) {
+        treks.push(trek);
+      }
+    }
+
+    // Return full trek data in response
+    res.json({
+      success: true,
+      message: `Successfully loaded ${treks.length} treks from Excel`,
+      count: treks.length,
+      data: treks
+    });
+
   } catch (error) {
     console.error('Error fetching trek data:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching trek data',
-      error: error.message
+      message: 'Error fetching trek data'
     });
   }
 });

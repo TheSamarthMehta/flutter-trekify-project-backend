@@ -50,12 +50,8 @@ router.post('/register', async (req, res) => {
 
     await user.save();
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET || 'fallback_secret_key',
-      { expiresIn: '7d' }
-    );
+    // Use the static JWT token from .env file
+    const token = process.env.JWT_SECRET;
 
     res.status(201).json({
       success: true,
@@ -65,8 +61,7 @@ router.post('/register', async (req, res) => {
         user: {
           id: user._id,
           email: user.email,
-          name: user.name,
-          isProfileComplete: user.isProfileComplete
+          name: user.name
         }
       }
     });
@@ -113,12 +108,8 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET || 'fallback_secret_key',
-      { expiresIn: '7d' }
-    );
+    // Use the static JWT token from .env file
+    const token = process.env.JWT_SECRET;
 
     res.json({
       success: true,
@@ -128,9 +119,7 @@ router.post('/login', async (req, res) => {
         user: {
           id: user._id,
           email: user.email,
-          name: user.name,
-          isProfileComplete: user.isProfileComplete,
-          preferences: user.preferences
+          name: user.name
         }
       }
     });
@@ -151,14 +140,9 @@ router.get('/me', auth, async (req, res) => {
   try {
     res.json({
       success: true,
+      message: 'Token is valid',
       data: {
-        user: {
-          id: req.user._id,
-          email: req.user.email,
-          name: req.user.name,
-          isProfileComplete: req.user.isProfileComplete,
-          preferences: req.user.preferences
-        }
+        authenticated: true
       }
     });
   } catch (error) {
@@ -166,49 +150,6 @@ router.get('/me', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error'
-    });
-  }
-});
-
-// @route   PUT /api/auth/profile
-// @desc    Update user profile
-// @access  Private
-router.put('/profile', auth, async (req, res) => {
-  try {
-    const { name, preferences } = req.body;
-    
-    const updateData = {};
-    if (name) updateData.name = name;
-    if (preferences) {
-      updateData.preferences = preferences;
-      updateData.isProfileComplete = true;
-    }
-
-    const user = await User.findByIdAndUpdate(
-      req.user._id,
-      updateData,
-      { new: true, runValidators: true }
-    ).select('-password');
-
-    res.json({
-      success: true,
-      message: 'Profile updated successfully',
-      data: {
-        user: {
-          id: user._id,
-          email: user.email,
-          name: user.name,
-          isProfileComplete: user.isProfileComplete,
-          preferences: user.preferences
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error('Profile update error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error during profile update'
     });
   }
 });
