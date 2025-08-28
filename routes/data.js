@@ -5,16 +5,144 @@ const fs = require('fs');
 
 const router = express.Router();
 
+// Helpers for robust header-based extraction
+function normalizeHeader(header) {
+  return String(header || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function buildHeaderIndex(headers) {
+  const indexByKey = {};
+  headers.forEach((h, idx) => {
+    const key = normalizeHeader(h);
+    if (key) indexByKey[key] = idx;
+  });
+  return indexByKey;
+}
+
+function findFirstIndex(indexByKey, candidates) {
+  for (const c of candidates) {
+    const key = normalizeHeader(c);
+    if (indexByKey[key] !== undefined) return indexByKey[key];
+  }
+  return undefined;
+}
+
+function parseBoolean(value) {
+  if (value === undefined || value === null) return false;
+  const v = String(value).toLowerCase().trim();
+  return v === 'yes' || v === 'true' || v === 'y' || v === '1';
+}
+
+// Normalize "Guide needed?" into exact strings: YES / NO / RECOMMENDED (keep OPTIONAL / NOT NEEDED as-is)
+function parseGuideNeededString(value) {
+  if (value === undefined || value === null) return '';
+  const v = String(value).toLowerCase().trim();
+  if (['required', 'yes', 'y', 'true', '1'].includes(v)) return 'YES';
+  if (['not needed', 'not required', 'no', 'false', '0', 'n'].includes(v)) return 'NO';
+  if (['recommended', 'recommend', 'advisable', 'advised'].includes(v)) return 'RECOMMENDED';
+  if (['optional', 'maybe'].includes(v)) return 'OPTIONAL';
+  return v.toUpperCase();
+}
+
+function parseYesNoString(value) {
+  if (value === undefined || value === null) return 'NO';
+  return parseBoolean(value) ? 'YES' : 'NO';
+}
+
+function detectImageUrl(row) {
+  for (let j = 0; j < row.length; j++) {
+    const cellValue = row[j];
+    if (
+      cellValue && typeof cellValue === 'string' &&
+      (cellValue.includes('cloudinary.com') ||
+        cellValue.includes('res.cloudinary') ||
+        cellValue.startsWith('https://res.cloudinary'))
+    ) {
+      return cellValue;
+    }
+  }
+  return '';
+}
+
+function parseTreksFromWorksheet(worksheet) {
+  const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+  if (jsonData.length === 0) {
+    return { treks: [], headers: [] };
+  }
+
+  const headers = jsonData[0];
+  const indexByKey = buildHeaderIndex(headers);
+
+  const idx = {
+    serialNumber: findFirstIndex(indexByKey, ['serial no', 'serial number', 's no', 'sno', 'sr no']),
+    trekName: findFirstIndex(indexByKey, ['trek name', 'name']),
+    state: findFirstIndex(indexByKey, ['state']),
+    trekType: findFirstIndex(indexByKey, ['trek type', 'type']),
+    difficultyLevel: findFirstIndex(indexByKey, ['difficulty', 'difficulty level']),
+    season: findFirstIndex(indexByKey, ['season', 'best season', 'best time']),
+    duration: findFirstIndex(indexByKey, ['duration']),
+    distance: findFirstIndex(indexByKey, ['distance']),
+    maxAltitude: findFirstIndex(indexByKey, ['max altitude', 'altitude', 'height', 'maxaltitude']),
+    trekDescription: findFirstIndex(indexByKey, ['description', 'trek description', 'about']),
+    image: findFirstIndex(indexByKey, ['image', 'image url', 'image link', 'cloudinary url', 'photo']),
+    ageGroup: findFirstIndex(indexByKey, ['age group', 'age', 'recommended age']),
+    guideNeeded: findFirstIndex(indexByKey, ['guide needed', 'guide need', 'need guide', 'guide required']),
+    snowTrek: findFirstIndex(indexByKey, ['snow trek', 'snow', 'is snow trek']),
+    recommendedGear: findFirstIndex(indexByKey, ['recommended gear', 'gear', 'gears', 'what to carry'])
+  };
+
+  const treks = [];
+  for (let i = 1; i < jsonData.length; i++) {
+    const row = jsonData[i];
+    if (!row || row.length === 0) continue;
+
+    const trekName = idx.trekName !== undefined ? row[idx.trekName] : row[1];
+    const state = idx.state !== undefined ? row[idx.state] : row[2];
+    if (!trekName || !state) continue;
+
+    const imageFromHeader = idx.image !== undefined ? row[idx.image] : undefined;
+    const image = imageFromHeader && typeof imageFromHeader === 'string' && imageFromHeader.startsWith('http')
+      ? imageFromHeader
+      : detectImageUrl(row);
+
+    const guideString = idx.guideNeeded !== undefined ? parseGuideNeededString(row[idx.guideNeeded]) : '';
+    const snowString = idx.snowTrek !== undefined ? parseYesNoString(row[idx.snowTrek]) : 'NO';
+
+    const trek = {
+      id: i - 1,
+      serialNumber: idx.serialNumber !== undefined ? row[idx.serialNumber] : (row[0] || i),
+      trekName: trekName || '',
+      state: state || '',
+      trekType: idx.trekType !== undefined ? (row[idx.trekType] || '') : (row[3] || ''),
+      difficultyLevel: idx.difficultyLevel !== undefined ? (row[idx.difficultyLevel] || '') : (row[4] || ''),
+      season: idx.season !== undefined ? (row[idx.season] || '') : (row[5] || ''),
+      duration: idx.duration !== undefined ? (row[idx.duration] || '') : (row[6] || ''),
+      distance: idx.distance !== undefined ? (row[idx.distance] || '') : (row[7] || ''),
+      maxAltitude: idx.maxAltitude !== undefined ? (row[idx.maxAltitude] || '') : (row[8] || ''),
+      trekDescription: idx.trekDescription !== undefined ? (row[idx.trekDescription] || '') : (row[9] || ''),
+      ageGroup: idx.ageGroup !== undefined ? (row[idx.ageGroup] || '') : '',
+      guideNeeded: guideString,
+      snowTrek: snowString,
+      recommendedGear: idx.recommendedGear !== undefined ? (row[idx.recommendedGear] || '') : '',
+      image
+    };
+
+    treks.push(trek);
+  }
+
+  return { treks, headers };
+}
+
 // @route   GET /api/data/load-excel
 // @desc    Load trek data from Excel file
 // @access  Public
 router.get('/load-excel', async (req, res) => {
   try {
-    console.log('Loading trek data from Excel file...');
-    
-    // Path to Excel file
     const excelPath = path.join(__dirname, '..', 'data', 'Flutter Data Set.xlsx');
-    
     if (!fs.existsSync(excelPath)) {
       return res.status(404).json({
         success: false,
@@ -23,87 +151,18 @@ router.get('/load-excel', async (req, res) => {
       });
     }
 
-    // Read Excel file
     const workbook = XLSX.readFile(excelPath);
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    
-    // Convert to JSON
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-    
-    if (jsonData.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Excel file is empty'
-      });
-    }
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
 
-    // Process the data
-    const headers = jsonData[0];
-    const treks = [];
-    
-    console.log('Excel headers:', headers);
-    console.log(`Found ${jsonData.length - 1} trek records`);
-
-    for (let i = 1; i < jsonData.length; i++) {
-      const row = jsonData[i];
-      if (!row || row.length === 0) continue;
-
-      // Based on our analysis: Col0=SerialNo, Col1=TrekName, Col2=State, etc.
-      const trek = {
-        id: i - 1,
-        serialNumber: row[0] || i,
-        trekName: row[1] || '', // Column 2 has trek names  
-        state: row[2] || '',    // Column 3 has state names
-        trekType: row[3] || '',
-        difficultyLevel: row[4] || '',
-        season: row[5] || '',
-        duration: row[6] || '',
-        distance: row[7] || '',
-        maxAltitude: row[8] || '',
-        trekDescription: row[9] || '',
-        image: '' // Will be populated with exact URLs from Excel
-      };
-
-      // Look for Cloudinary URLs specifically in column 12 (index 12) based on .NET findings
-      const cloudinaryColumn = row[12]; // Column 13 (index 12)
-      if (cloudinaryColumn && typeof cloudinaryColumn === 'string' && 
-          (cloudinaryColumn.includes('cloudinary.com') || 
-           cloudinaryColumn.includes('res.cloudinary') ||
-           cloudinaryColumn.startsWith('https://res.cloudinary'))) {
-        trek.image = cloudinaryColumn;
-        console.log(`Found Cloudinary URL for ${trek.trekName}: ${cloudinaryColumn}`);
-      } else {
-        // Fallback: Look in other columns if not found in column 13
-        for (let j = 10; j < row.length; j++) {
-          const cellValue = row[j];
-          if (cellValue && typeof cellValue === 'string' && 
-              (cellValue.includes('cloudinary.com') || 
-               cellValue.includes('res.cloudinary') ||
-               cellValue.startsWith('https://res.cloudinary'))) {
-            trek.image = cellValue;
-            console.log(`Found Cloudinary URL in column ${j+1} for ${trek.trekName}: ${cellValue}`);
-            break;
-          }
-        }
-      }
-
-      // Only add trek if it has valid data
-      if (trek.trekName && trek.state) {
-        treks.push(trek);
-      }
-    }
-
-    console.log(`Processed ${treks.length} valid treks`);
-    console.log('Sample trek with image:', treks.find(t => t.image) || treks[0]);
+    const { treks, headers } = parseTreksFromWorksheet(worksheet);
 
     res.json({
       success: true,
       message: `Successfully loaded ${treks.length} treks from Excel`,
       count: treks.length,
+      headers,
       data: treks
     });
-
   } catch (error) {
     console.error('Error loading Excel data:', error);
     res.status(500).json({
@@ -119,11 +178,7 @@ router.get('/load-excel', async (req, res) => {
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    console.log('🏔️  All treks fetched');
-    
-    // Path to Excel file
     const excelPath = path.join(__dirname, '..', 'data', 'Flutter Data Set.xlsx');
-    
     if (!fs.existsSync(excelPath)) {
       return res.status(404).json({
         success: false,
@@ -131,78 +186,16 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // Read Excel file
     const workbook = XLSX.readFile(excelPath);
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    
-    // Convert to JSON
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-    
-    if (jsonData.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Excel file is empty'
-      });
-    }
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const { treks } = parseTreksFromWorksheet(worksheet);
 
-    // Process the data
-    const treks = [];
-    
-    for (let i = 1; i < jsonData.length; i++) {
-      const row = jsonData[i];
-      if (!row || row.length === 0) continue;
-
-      const trek = {
-        id: i - 1,
-        serialNumber: row[0] || i,
-        trekName: row[1] || '',
-        state: row[2] || '',
-        trekType: row[3] || '',
-        difficultyLevel: row[4] || '',
-        season: row[5] || '',
-        duration: row[6] || '',
-        distance: row[7] || '',
-        maxAltitude: row[8] || '',
-        trekDescription: row[9] || '',
-        image: ''
-      };
-
-      // Look for Cloudinary URLs in column 12
-      const cloudinaryColumn = row[12];
-      if (cloudinaryColumn && typeof cloudinaryColumn === 'string' && 
-          (cloudinaryColumn.includes('cloudinary.com') || 
-           cloudinaryColumn.includes('res.cloudinary') ||
-           cloudinaryColumn.startsWith('https://res.cloudinary'))) {
-        trek.image = cloudinaryColumn;
-      } else {
-        // Fallback: Look in other columns
-        for (let j = 10; j < row.length; j++) {
-          const cellValue = row[j];
-          if (cellValue && typeof cellValue === 'string' && 
-              (cellValue.includes('cloudinary.com') || 
-               cellValue.includes('res.cloudinary') ||
-               cellValue.startsWith('https://res.cloudinary'))) {
-            trek.image = cellValue;
-            break;
-          }
-        }
-      }
-
-      // Only add trek if it has valid data
-      if (trek.trekName && trek.state) {
-        treks.push(trek);
-      }
-    }
-
-    // Return full trek data in response
     res.json({
       success: true,
       message: `Successfully loaded ${treks.length} treks from Excel`,
       count: treks.length,
       data: treks
     });
-
   } catch (error) {
     console.error('Error fetching trek data:', error);
     res.status(500).json({
